@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 char judgeStyle(mode_t mode);
 void getMode(mode_t mode, char* aMode);
@@ -27,6 +28,8 @@ int main(int argc, char* argv[])
     char error[30];
     char aMode[10];
     char style;
+    char forLink[100];
+    ssize_t num;
 
     if (argc == 1)
     {
@@ -35,7 +38,8 @@ int main(int argc, char* argv[])
     }
     for (i = 1; i < argc; ++i)
     {
-        if (stat(argv[i], &aStat) < 0)
+//        if (stat(argv[i], &aStat) < 0)     This function will follow symbolic link
+        if (fstatat(AT_FDCWD, argv[i], &aStat, AT_SYMLINK_NOFOLLOW) < 0) //use fstatat to not follow symbolic link
         {
             sprintf(error, "error with file:%s", argv[i]);
             err_ret(error);
@@ -43,8 +47,21 @@ int main(int argc, char* argv[])
         }
         style = judgeStyle(aStat.st_mode);
         getMode(aStat.st_mode, aMode);
-        printf("%c%s %s %ld %d %d %ld\n", style, aMode, argv[i], aStat.st_nlink, aStat.st_uid, aStat.st_gid, aStat.st_size);
-        
+        if (style != 'l')
+        {
+             printf("%c%s %s %ld %d %d %ld\n", style, aMode, argv[i], aStat.st_nlink, aStat.st_uid, aStat.st_gid, aStat.st_size);
+        }
+        else
+        {
+            if((num = readlink(argv[i], forLink, aStat.st_size)) < 0)
+            {
+                sprintf(error, "error with file:%s", argv[i]);
+                err_ret(error);
+                continue;
+            }
+            forLink[num] = 0;
+            printf("%c%s %ld %d %d %ld %s -> %s\n", style, aMode,  aStat.st_nlink, aStat.st_uid, aStat.st_gid, aStat.st_size, argv[i], forLink);
+        } 
     }
     return 0;
     
